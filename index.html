@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<title>HTML → Figma Converter</title>
+
+<style>
+
+body{
+font-family:Arial;
+background:#0f172a;
+color:white;
+padding:40px;
+}
+
+.container{
+max-width:900px;
+margin:auto;
+}
+
+h1{
+font-size:32px;
+margin-bottom:20px;
+}
+
+input{
+width:70%;
+padding:12px;
+border-radius:6px;
+border:none;
+font-size:16px;
+}
+
+button{
+padding:12px 20px;
+border:none;
+border-radius:6px;
+background:#3b82f6;
+color:white;
+font-size:16px;
+cursor:pointer;
+margin-left:10px;
+}
+
+button:hover{
+background:#2563eb;
+}
+
+pre{
+margin-top:30px;
+background:#020617;
+padding:20px;
+border-radius:8px;
+overflow:auto;
+max-height:500px;
+}
+
+.download{
+margin-top:20px;
+display:none;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>HTML → Figma Converter</h1>
+
+<input id="url" placeholder="https://example.com">
+
+<button onclick="convert()">Convert</button>
+
+<button class="download" id="downloadBtn" onclick="downloadFigma()">Download Figma JSON</button>
+
+<pre id="result"></pre>
+
+</div>
+
+<script>
+
+let figmaData = null
+
+async function fetchHTML(url){
+
+const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)
+
+const response = await fetch(proxy)
+
+return await response.text()
+
+}
+
+function textNode(text){
+
+return {
+type:"TEXT",
+characters:text,
+style:{
+fontFamily:"Inter",
+fontSize:16
+}
+}
+
+}
+
+function frame(children){
+
+return {
+type:"FRAME",
+layoutMode:"VERTICAL",
+children:children
+}
+
+}
+
+function convertDOMToFigma(doc){
+
+const bodyChildren = []
+
+const elements = doc.body.children
+
+for(let el of elements){
+
+const tag = el.tagName
+
+if(
+tag === "P" ||
+tag === "SPAN" ||
+tag === "H1" ||
+tag === "H2" ||
+tag === "H3"
+){
+
+bodyChildren.push(
+textNode(el.innerText.trim())
+)
+
+}else{
+
+bodyChildren.push(
+frame([])
+)
+
+}
+
+}
+
+return {
+
+name:"HTML Import",
+
+document:{
+
+type:"DOCUMENT",
+
+children:[
+{
+type:"CANVAS",
+name:"Page 1",
+children:[
+frame(bodyChildren)
+]
+}
+]
+
+}
+
+}
+
+}
+
+async function convert(){
+
+const url = document.getElementById("url").value
+
+if(!url){
+alert("Enter a URL")
+return
+}
+
+document.getElementById("result").textContent = "Loading website..."
+
+try{
+
+const html = await fetchHTML(url)
+
+const parser = new DOMParser()
+
+const doc = parser.parseFromString(html,"text/html")
+
+figmaData = convertDOMToFigma(doc)
+
+document.getElementById("result").textContent =
+JSON.stringify(figmaData,null,2)
+
+document.getElementById("downloadBtn").style.display="inline-block"
+
+}catch(e){
+
+document.getElementById("result").textContent = "Error: " + e
+
+}
+
+}
+
+function downloadFigma(){
+
+const blob = new Blob(
+[JSON.stringify(figmaData,null,2)],
+{type:"application/json"}
+)
+
+const a = document.createElement("a")
+
+a.href = URL.createObjectURL(blob)
+
+a.download = "figma.json"
+
+a.click()
+
+}
+
+</script>
+
+</body>
+
+</html>

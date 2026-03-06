@@ -1,65 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
 
 <meta charset="UTF-8">
-<title>HTML → Figma Converter</title>
+
+<title>Website → Figma ULTRA</title>
 
 <style>
 
 body{
-font-family:Arial;
-background:#0f172a;
+font-family:Inter,Arial;
+background:#020617;
 color:white;
 padding:40px;
 }
 
 .container{
-max-width:900px;
+max-width:1100px;
 margin:auto;
-}
-
-h1{
-font-size:32px;
-margin-bottom:20px;
 }
 
 input{
 width:70%;
 padding:12px;
-border-radius:6px;
+border-radius:8px;
 border:none;
-font-size:16px;
 }
 
 button{
 padding:12px 20px;
-border:none;
-border-radius:6px;
 background:#3b82f6;
+border:none;
+border-radius:8px;
 color:white;
-font-size:16px;
 cursor:pointer;
 margin-left:10px;
-}
-
-button:hover{
-background:#2563eb;
 }
 
 pre{
 margin-top:30px;
 background:#020617;
 padding:20px;
-border-radius:8px;
-overflow:auto;
+border-radius:10px;
 max-height:500px;
-}
-
-.download{
-margin-top:20px;
-display:none;
+overflow:auto;
 }
 
 </style>
@@ -70,13 +55,15 @@ display:none;
 
 <div class="container">
 
-<h1>HTML → Figma Converter</h1>
+<h1>Website → Figma ULTRA</h1>
 
 <input id="url" placeholder="https://example.com">
 
 <button onclick="convert()">Convert</button>
 
-<button class="download" id="downloadBtn" onclick="downloadFigma()">Download Figma JSON</button>
+<button onclick="download()" id="downloadBtn" style="display:none">
+Download Figma JSON
+</button>
 
 <pre id="result"></pre>
 
@@ -84,89 +71,213 @@ display:none;
 
 <script>
 
-let figmaData = null
+let figmaFile=null
 
 async function fetchHTML(url){
 
-const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)
+const proxy="https://api.allorigins.win/raw?url="+encodeURIComponent(url)
 
-const response = await fetch(proxy)
+const r=await fetch(proxy)
 
-return await response.text()
+return await r.text()
 
 }
 
-function textNode(text){
+function getStyle(el){
 
-return {
+const s=window.getComputedStyle(el)
+
+return{
+
+display:s.display,
+flexDirection:s.flexDirection,
+justifyContent:s.justifyContent,
+alignItems:s.alignItems,
+width:parseFloat(s.width),
+height:parseFloat(s.height),
+background:s.backgroundColor,
+color:s.color,
+fontSize:parseFloat(s.fontSize)
+
+}
+
+}
+
+function textNode(text,style){
+
+return{
+
 type:"TEXT",
+
 characters:text,
+
 style:{
-fontFamily:"Inter",
-fontSize:16
+fontSize:style.fontSize||16,
+fills:[
+{
+type:"SOLID",
+color:style.color
 }
+]
 }
 
 }
 
-function frame(children){
+}
 
-return {
+function imageNode(src,w,h){
+
+return{
+
+type:"RECTANGLE",
+
+fills:[
+{
+type:"IMAGE",
+src:src
+}
+],
+
+size:{
+width:w||200,
+height:h||150
+}
+
+}
+
+}
+
+function frameNode(children,style){
+
+let layout="VERTICAL"
+
+if(style.display==="flex"){
+
+layout=style.flexDirection==="row"
+?"HORIZONTAL"
+:"VERTICAL"
+
+}
+
+return{
+
 type:"FRAME",
-layoutMode:"VERTICAL",
+
+layoutMode:layout,
+
+primaryAxisSizingMode:"AUTO",
+
+counterAxisSizingMode:"AUTO",
+
+fills:[
+{
+type:"SOLID",
+color:style.background
+}
+],
+
 children:children
-}
 
 }
 
-function convertDOMToFigma(doc){
+}
 
-const bodyChildren = []
+function elementToNode(el){
 
-const elements = doc.body.children
+const tag=el.tagName
 
-for(let el of elements){
+const style=getStyle(el)
 
-const tag = el.tagName
+if(tag==="IMG"){
+
+return imageNode(
+el.src,
+style.width,
+style.height
+)
+
+}
 
 if(
-tag === "P" ||
-tag === "SPAN" ||
-tag === "H1" ||
-tag === "H2" ||
-tag === "H3"
+tag==="P"||
+tag==="SPAN"||
+tag==="H1"||
+tag==="H2"||
+tag==="H3"||
+tag==="A"||
+tag==="BUTTON"
 ){
 
-bodyChildren.push(
-textNode(el.innerText.trim())
-)
+const text=el.innerText.trim()
 
-}else{
+if(text.length){
 
-bodyChildren.push(
-frame([])
-)
+return textNode(text,style)
 
 }
 
 }
 
-return {
+const children=[]
 
-name:"HTML Import",
+for(let child of el.children){
+
+const node=elementToNode(child)
+
+if(node) children.push(node)
+
+}
+
+return frameNode(children,style)
+
+}
+
+function convertDOM(doc){
+
+const nodes=[]
+
+for(let el of doc.body.children){
+
+const node=elementToNode(el)
+
+if(node) nodes.push(node)
+
+}
+
+return{
+
+name:"Website Import",
 
 document:{
 
 type:"DOCUMENT",
 
 children:[
+
 {
+
 type:"CANVAS",
-name:"Page 1",
+
+name:"Page",
+
 children:[
-frame(bodyChildren)
-]
+
+{
+
+type:"FRAME",
+
+name:"Website",
+
+layoutMode:"VERTICAL",
+
+children:nodes
+
 }
+
+]
+
+}
+
 ]
 
 }
@@ -177,50 +288,37 @@ frame(bodyChildren)
 
 async function convert(){
 
-const url = document.getElementById("url").value
+const url=document.getElementById("url").value
 
-if(!url){
-alert("Enter a URL")
-return
-}
+document.getElementById("result").textContent="Scanning website..."
 
-document.getElementById("result").textContent = "Loading website..."
+const html=await fetchHTML(url)
 
-try{
+const parser=new DOMParser()
 
-const html = await fetchHTML(url)
+const doc=parser.parseFromString(html,"text/html")
 
-const parser = new DOMParser()
+figmaFile=convertDOM(doc)
 
-const doc = parser.parseFromString(html,"text/html")
-
-figmaData = convertDOMToFigma(doc)
-
-document.getElementById("result").textContent =
-JSON.stringify(figmaData,null,2)
+document.getElementById("result").textContent=
+JSON.stringify(figmaFile,null,2)
 
 document.getElementById("downloadBtn").style.display="inline-block"
 
-}catch(e){
-
-document.getElementById("result").textContent = "Error: " + e
-
 }
 
-}
+function download(){
 
-function downloadFigma(){
-
-const blob = new Blob(
-[JSON.stringify(figmaData,null,2)],
+const blob=new Blob(
+[JSON.stringify(figmaFile,null,2)],
 {type:"application/json"}
 )
 
-const a = document.createElement("a")
+const a=document.createElement("a")
 
-a.href = URL.createObjectURL(blob)
+a.href=URL.createObjectURL(blob)
 
-a.download = "figma.json"
+a.download="figma.json"
 
 a.click()
 
